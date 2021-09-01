@@ -1,0 +1,12 @@
+{
+	"name": "LS_AZURE_KEY_VAULT",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"description": "Connection to Azure Key Vault for secrets, connections strings, and passwords. Recommended by Microsoft if you use Git with ADF.",
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "https://SbxUsceAdapKv.vault.azure.net/"
+		}
+	}
+}

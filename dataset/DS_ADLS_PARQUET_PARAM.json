@@ -1,0 +1,45 @@
+{
+	"name": "DS_ADLS_PARQUET_PARAM",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_ADLS",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"DataLakeContainer": {
+				"type": "string"
+			},
+			"DataLakeDirectory": {
+				"type": "string"
+			},
+			"DataLakeFile": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "ADAP"
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@dataset().DataLakeFile",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@dataset().DataLakeDirectory",
+					"type": "Expression"
+				},
+				"fileSystem": {
+					"value": "@dataset().DataLakeContainer",
+					"type": "Expression"
+				}
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

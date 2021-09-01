@@ -1,0 +1,57 @@
+{
+	"name": "DS_ADLS",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_ADLS",
+			"type": "LinkedServiceReference"
+		},
+		"parameters": {
+			"container": {
+				"type": "string"
+			},
+			"sourcesystem": {
+				"type": "string"
+			},
+			"sourcetable": {
+				"type": "string"
+			},
+			"sourceschema": {
+				"type": "string"
+			},
+			"file": {
+				"type": "string"
+			},
+			"filetype": {
+				"type": "string"
+			},
+			"TriggerTime": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "3Cloud DPi30"
+		},
+		"annotations": [],
+		"type": "Parquet",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobFSLocation",
+				"fileName": {
+					"value": "@concat(formatDateTime(dataset().TriggerTime,'yyyy'),'/', formatDateTime(dataset().TriggerTime,'MM'),'/',formatDateTime(dataset().TriggerTime,'dd'),'/',\ndataset().file,'.',dataset().filetype)",
+					"type": "Expression"
+				},
+				"folderPath": {
+					"value": "@concat(dataset().sourcesystem,'/',dataset().sourceschema,'/',dataset().sourcetable)",
+					"type": "Expression"
+				},
+				"fileSystem": {
+					"value": "@dataset().container",
+					"type": "Expression"
+				}
+			},
+			"compressionCodec": "snappy"
+		},
+		"schema": []
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

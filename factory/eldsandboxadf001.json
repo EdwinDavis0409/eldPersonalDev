@@ -1,0 +1,9 @@
+{
+	"name": "eldsandboxadf001",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "accd7aaf-551b-46bc-afef-62e9f3a6697e",
+		"tenantId": "052eb64f-2625-4572-a928-5e7d322291f1"
+	}
+}
