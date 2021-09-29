@@ -46,6 +46,10 @@
 		"LS_AZURE_KEY_VAULT_properties_typeProperties_baseUrl": {
 			"type": "string",
 			"defaultValue": "https://SbxUsceAdapKv.vault.azure.net/"
+		},
+		"trigger1_properties_typeProperties_scope": {
+			"type": "string",
+			"defaultValue": "/subscriptions/56b451c2-60d1-45a0-aae3-8622f9b01361/resourceGroups/PreEngagementSandbox/providers/Microsoft.Storage/storageAccounts/eldstorageaccount"
 		}
 	},
 	"variables": {
@@ -1320,6 +1324,37 @@
 				"typeProperties": {}
 			},
 			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/trigger1')]",
+			"type": "Microsoft.DataFactory/factories/triggers",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"runtimeState": "Started",
+				"pipelines": [
+					{
+						"pipelineReference": {
+							"referenceName": "CopyCSV",
+							"type": "PipelineReference"
+						},
+						"parameters": {}
+					}
+				],
+				"type": "BlobEventsTrigger",
+				"typeProperties": {
+					"blobPathBeginsWith": "/elddatacontainer/blobs/",
+					"blobPathEndsWith": ".csv",
+					"ignoreEmptyBlobs": true,
+					"scope": "[parameters('trigger1_properties_typeProperties_scope')]",
+					"events": [
+						"Microsoft.Storage.BlobCreated"
+					]
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/CopyCSV')]"
+			]
 		}
 	]
 }

@@ -35,6 +35,9 @@
 		"LS_AZURE_KEY_VAULT_properties_typeProperties_baseUrl": {
 			"value": "https://SbxUsceAdapKv.vault.azure.net/"
 		},
+		"trigger1_properties_typeProperties_scope": {
+			"value": "/subscriptions/56b451c2-60d1-45a0-aae3-8622f9b01361/resourceGroups/PreEngagementSandbox/providers/Microsoft.Storage/storageAccounts/eldstorageaccount"
+		},
 		"containerUri": {
 			"value": ""
 		},
