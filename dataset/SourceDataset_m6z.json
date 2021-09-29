@@ -14,7 +14,7 @@
 				"fileSystem": "elddatacontainer"
 			},
 			"columnDelimiter": ",",
-			"escapeChar": "",
+			"escapeChar": "\"",
 			"firstRowAsHeader": true,
 			"quoteChar": "\""
 		},
