@@ -1,0 +1,45 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "eldsandboxadf001"
+		},
+		"AzureDataLakeStorage1_accountKey": {
+			"value": ""
+		},
+		"AzureSqlDatabase1_connectionString": {
+			"value": ""
+		},
+		"FtpServer1_password": {
+			"value": ""
+		},
+		"LS_ADLS_accountKey": {
+			"value": ""
+		},
+		"linkedService1_connectionString": {
+			"value": ""
+		},
+		"AzureDataLakeStorage1_properties_typeProperties_url": {
+			"value": "https://eldstorageaccount.dfs.core.windows.net"
+		},
+		"FtpServer1_properties_typeProperties_host": {
+			"value": "vikings.ftptoday.com"
+		},
+		"FtpServer1_properties_typeProperties_userName": {
+			"value": "vVikes3CloudEdwin"
+		},
+		"LS_ADLS_properties_typeProperties_url": {
+			"value": "https://sbxusceadapadls.dfs.core.windows.net"
+		},
+		"LS_AZURE_KEY_VAULT_properties_typeProperties_baseUrl": {
+			"value": "https://SbxUsceAdapKv.vault.azure.net/"
+		},
+		"containerUri": {
+			"value": ""
+		},
+		"containerSasToken": {
+			"value": ""
+		}
+	}
+}
