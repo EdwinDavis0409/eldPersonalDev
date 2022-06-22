@@ -1,0 +1,172 @@
+{
+	"name": "plEmailNotification",
+	"properties": {
+		"activities": [
+			{
+				"name": "Web1",
+				"type": "WebActivity",
+				"dependsOn": [
+					{
+						"activity": "Copy_m6z",
+						"dependencyConditions": [
+							"Failed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"url": "https://prod-05.centralus.logic.azure.com:443/workflows/e859837f7ae04c4ca34c57375addaee2/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=aT5uKp63WVdWrTbTHSHZ858XqhPTkacAmocWU3PWXiA",
+					"method": "POST",
+					"headers": {
+						"Content-Type": "application/json"
+					},
+					"body": {
+						"value": "{\n\"message\": \"This is a custom dynamic message from you pipeline with run ID @{pipeline().RunID} error messages @{activity('Copy_m6z').output.errors[0].message}\",\n\"dataFactoryName\":\"@{pipeline().DataFactory}\",\n\"pipelineName\": \"@{pipeline().Pipeline}\",\n\"receiver\":\"@{pipeline().parameters.receiver}\"\n}",
+						"type": "Expression"
+					}
+				}
+			},
+			{
+				"name": "Copy_m6z",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [
+					{
+						"name": "Source",
+						"value": "elddatacontainer//JEOPARDY_NO_DATE.csv"
+					},
+					{
+						"name": "Destination",
+						"value": "dbo.Azure Data Lake Storage Gen2 file"
+					}
+				],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobFSReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings",
+							"skipLineCount": 0
+						}
+					},
+					"sink": {
+						"type": "AzureSqlSink",
+						"preCopyScript": "nnn",
+						"writeBehavior": "insert",
+						"sqlWriterUseTableLock": false,
+						"tableOption": "autoCreate",
+						"disableMetricsCollection": false
+					},
+					"enableStaging": false,
+					"validateDataConsistency": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"mappings": [
+							{
+								"source": {
+									"name": "Show Number",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": "Show Number",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": " Round",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": " Round",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": " Category",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": " Category",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": " Value",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": " Value",
+									"type": "String"
+								}
+							},
+							{
+								"source": {
+									"name": " Question",
+									"type": "String",
+									"physicalType": "String"
+								},
+								"sink": {
+									"name": " Question",
+									"type": "String"
+								}
+							}
+						],
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "SourceDataset_m6z",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DestinationDataset_m6z",
+						"type": "DatasetReference"
+					}
+				]
+			}
+		],
+		"parameters": {
+			"receiver": {
+				"type": "string",
+				"defaultValue": "edavis@3cloudsolutions.com"
+			},
+			"message": {
+				"type": "string",
+				"defaultValue": "\"Some Default Message Here\""
+			}
+		},
+		"annotations": []
+	}
+}
