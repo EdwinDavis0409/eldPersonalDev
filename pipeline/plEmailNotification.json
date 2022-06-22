@@ -22,12 +22,15 @@
 				},
 				"userProperties": [],
 				"typeProperties": {
-					"url": "https://prod-05.centralus.logic.azure.com:443/workflows/e859837f7ae04c4ca34c57375addaee2",
+					"url": "https://prod-05.centralus.logic.azure.com:443/workflows/e859837f7ae04c4ca34c57375addaee2/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=aT5uKp63WVdWrTbTHSHZ858XqhPTkacAmocWU3PWXiA",
 					"method": "POST",
 					"headers": {
 						"Content-Type": "application/json"
 					},
-					"body": "nnnnnn"
+					"body": {
+						"value": "{\n\"message\": \"This is a custom dynamic message from you pipeline with run ID @{pipeline().RunID}\",\n\"dataFactoryName\":\"@{pipeline().DataFactory}\",\n\"pipelineName\": \"@{pipeline().Pipeline}\",\n\"receiver\":\"@{pipeline().parameters.receiver}\",\n\"errorMessage\": \"activity('Copy_m6z').output.errors[0].message\"\n}",
+						"type": "Expression"
+					}
 				}
 			},
 			{
