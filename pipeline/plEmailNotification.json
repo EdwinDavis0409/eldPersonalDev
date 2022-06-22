@@ -23,14 +23,11 @@
 				"userProperties": [],
 				"typeProperties": {
 					"url": "https://prod-05.centralus.logic.azure.com:443/workflows/e859837f7ae04c4ca34c57375addaee2",
-					"method": "POST",
+					"method": "GET",
 					"headers": {
 						"Content-Type": "application/json"
 					},
-					"body": {
-						"value": "{\n\"message\": \"This is a custom dynamic message from you pipeline with run ID @{pipeline().RunID}\",\n\"dataFactoryName\":\"@{pipeline().DataFactory}\",\n\"pipelineName\": \"@{pipeline().Pipeline}\",\n\"receiver\":\"@{pipeline().parameters.receiver}\",\n\"errorMessage\": \"activity('Copy_m6z').output.errors[0].message\"\n}\n",
-						"type": "Expression"
-					}
+					"body": "nnnnnn"
 				}
 			},
 			{
