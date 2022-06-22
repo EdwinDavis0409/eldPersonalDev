@@ -161,10 +161,6 @@
 			"receiver": {
 				"type": "string",
 				"defaultValue": "edavis@3cloudsolutions.com"
-			},
-			"message": {
-				"type": "string",
-				"defaultValue": "\"Some Default Message Here\""
 			}
 		},
 		"annotations": []
