@@ -28,7 +28,7 @@
 						"Content-Type": "application/json"
 					},
 					"body": {
-						"value": "{\n\"message\": \"This is a custom dynamic message from you pipeline with run ID @{pipeline().RunID}\",\n\"dataFactoryName\":\"@{pipeline().DataFactory}\",\n\"pipelineName\": \"@{pipeline().Pipeline}\",\n\"receiver\":\"@{pipeline().parameters.receiver}\",\n\"errorMessage\": \"activity('Copy_m6z').output.errors[0].message\"\n}",
+						"value": "{\n\"message\": \"This is a custom dynamic message from you pipeline with run ID @{pipeline().RunID} error messages @{activity('Copy_m6z').output.errors[0].message}\",\n\"dataFactoryName\":\"@{pipeline().DataFactory}\",\n\"pipelineName\": \"@{pipeline().Pipeline}\",\n\"receiver\":\"@{pipeline().parameters.receiver}\"\n}",
 						"type": "Expression"
 					}
 				}
