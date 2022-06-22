@@ -23,7 +23,7 @@
 				"userProperties": [],
 				"typeProperties": {
 					"url": "https://prod-05.centralus.logic.azure.com:443/workflows/e859837f7ae04c4ca34c57375addaee2",
-					"method": "GET",
+					"method": "POST",
 					"headers": {
 						"Content-Type": "application/json"
 					},
