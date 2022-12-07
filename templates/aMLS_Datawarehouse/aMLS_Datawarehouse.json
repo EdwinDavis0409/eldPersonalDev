@@ -1,0 +1,1389 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name"
+		},
+		"ls_unionsql": {
+			"type": "string"
+		},
+		"ls_MLSdw": {
+			"type": "string"
+		},
+		"ls_uniondatalake": {
+			"type": "string"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/aMLS_Datawarehouse')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Paciolan_GetEntityList",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Get Notification Recipients",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "MLS_GetEntityList",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"dataSource": {
+									"value": "@pipeline().parameters.dataSource",
+									"type": "Expression"
+								},
+								"loadFrequency": {
+									"value": "@pipeline().parameters.LoadFrequency",
+									"type": "Expression"
+								},
+								"triggeredbypipeline": {
+									"value": "@pipeline().Pipeline",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Notify Failure",
+						"type": "ExecutePipeline",
+						"dependsOn": [
+							{
+								"activity": "Paciolan_GetEntityList",
+								"dependencyConditions": [
+									"Failed"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"pipeline": {
+								"referenceName": "SendEmail",
+								"type": "PipelineReference"
+							},
+							"waitOnCompletion": true,
+							"parameters": {
+								"recipientList": {
+									"value": "@activity('Get Notification Recipients').output.firstRow.NotifyRecipientsOnError",
+									"type": "Expression"
+								},
+								"subject": {
+									"value": "Data Factory Alert: @{pipeline().Pipeline} ",
+									"type": "Expression"
+								},
+								"messageBody": {
+									"value": "@{pipeline().parameters.dataSource} load processing failed.\nPipeline RunId: @{pipeline().RunId}",
+									"type": "Expression"
+								}
+							}
+						}
+					},
+					{
+						"name": "Get Notification Recipients",
+						"type": "Lookup",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "@concat('SELECT NotifyRecipientsOnError \nFROM meta.ControlJobs\nWHERE PipelineName = ','''',pipeline().Pipeline, '''')",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "ds_SQL_unionsqldb",
+								"type": "DatasetReference",
+								"parameters": {
+									"schemaName": "meta",
+									"tableName": "ControlJobs"
+								}
+							}
+						}
+					}
+				],
+				"parameters": {
+					"dataSource": {
+						"type": "string",
+						"defaultValue": "MLSDW"
+					},
+					"LoadFrequency": {
+						"type": "string",
+						"defaultValue": "Daily"
+					}
+				},
+				"folder": {
+					"name": "MLS DataWarehouse"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-12-07T17:15:20Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/pipelines/MLS_GetEntityList')]",
+				"[concat(variables('factoryId'), '/pipelines/SendEmail')]",
+				"[concat(variables('factoryId'), '/datasets/ds_SQL_unionsqldb')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/MLS_GetEntityList')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Get Metadata",
+						"type": "Lookup",
+						"dependsOn": [
+							{
+								"activity": "Set currDateTime",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "AzureSqlSource",
+								"sqlReaderQuery": {
+									"value": "SELECT *\nFROM meta.vControlTable --etl.vControlTable\nWHERE SourceType = 'MLSDW'\n /* '@{pipeline().parameters.dataSource}'\n    AND Frequency = '@{pipeline().parameters.loadFrequency}' */\n    AND PipelineIsActive = 1",
+									"type": "Expression"
+								},
+								"queryTimeout": "02:00:00",
+								"partitionOption": "None"
+							},
+							"dataset": {
+								"referenceName": "ds_SQL_unionsqldb",
+								"type": "DatasetReference",
+								"parameters": {
+									"schemaName": "meta",
+									"tableName": "vControlTable"
+								}
+							},
+							"firstRowOnly": false
+						}
+					},
+					{
+						"name": "ForEach Entity",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "GetAPISecret",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@activity('Get Metadata').output.value",
+								"type": "Expression"
+							},
+							"isSequential": false,
+							"activities": [
+								{
+									"name": "DataMovementForEachObject",
+									"type": "ExecutePipeline",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"pipeline": {
+											"referenceName": "MLS_DataMovement",
+											"type": "PipelineReference"
+										},
+										"waitOnCompletion": true,
+										"parameters": {
+											"SourceTableName": {
+												"value": "@item().SourceTableName",
+												"type": "Expression"
+											},
+											"WaterMarkDate": {
+												"value": "@item().LastExecuted\n",
+												"type": "Expression"
+											},
+											"DestinationTableName": {
+												"value": "@item().DestinationTableName",
+												"type": "Expression"
+											},
+											"DestinationSchema": {
+												"value": "@item().DestinationSchemaName",
+												"type": "Expression"
+											},
+											"BlobContainer": {
+												"value": "@item().ContainerName",
+												"type": "Expression"
+											},
+											"RawFolder": {
+												"value": "@item().RawFolder",
+												"type": "Expression"
+											},
+											"KeyColumns": {
+												"value": "@item().SourceIDColumn",
+												"type": "Expression"
+											},
+											"APISubscriptionKey": {
+												"value": "@activity('GetAPISecret').output.value",
+												"type": "Expression"
+											},
+											"MetaControltableControlID": {
+												"value": "@item().ControlID",
+												"type": "Expression"
+											},
+											"MainPipeline": {
+												"value": "@pipeline()?.TriggeredByPipelineName",
+												"type": "Expression"
+											},
+											"StoredProc": {
+												"value": "@item().CustomCode",
+												"type": "Expression"
+											}
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "Set currDateTime",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "currDateTime",
+							"value": {
+								"value": "@formatDateTime(utcNow(), 'yyyy-MM-ddTHH:mm:ss')",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "GetAPISecret",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "Get Metadata",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://keyvault2501.vault.azure.net/secrets/MLSOcpApimSubscriptionKey/37aac8b7dc924b89903dff430611b333?api-version=7.0",
+							"method": "GET",
+							"authentication": {
+								"type": "MSI",
+								"resource": "https://vault.azure.net"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"dataSource": {
+						"type": "string",
+						"defaultValue": "MLSDW"
+					},
+					"loadFrequency": {
+						"type": "string",
+						"defaultValue": "Daily"
+					},
+					"triggeredbypipeline": {
+						"type": "string",
+						"defaultValue": "Manual"
+					}
+				},
+				"variables": {
+					"currDateTime": {
+						"type": "String"
+					},
+					"NoFurtherProcess": {
+						"type": "Boolean"
+					},
+					"NoNewFiles": {
+						"type": "String"
+					}
+				},
+				"folder": {
+					"name": "MLS DataWarehouse"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-12-06T20:54:48Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_SQL_unionsqldb')]",
+				"[concat(variables('factoryId'), '/pipelines/MLS_DataMovement')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/SendEmail')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Send Email",
+						"type": "WebActivity",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.00:02:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://prod-32.eastus.logic.azure.com:443/workflows/4c9ff2dabf3949ccb557dc5125129f6a/triggers/manual/paths/invoke?api-version=2016-10-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=0zmygai0ZLDcpe3zymsQo9Rh9nizmsSxItaZaz_bNCI",
+							"method": "POST",
+							"body": {
+								"value": "{\n    \"messageBody\": \"@{pipeline().parameters.messageBody}\",\n    \"recipientList\": \"@{pipeline().parameters.recipientList}\",\n    \"subject\": \"@{pipeline().parameters.subject}\"\n}",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"recipientList": {
+						"type": "string"
+					},
+					"subject": {
+						"type": "string"
+					},
+					"messageBody": {
+						"type": "string"
+					}
+				},
+				"folder": {
+					"name": "Shared Components"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-11-16T19:39:01Z"
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_SQL_unionsqldb')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('ls_unionsql')]",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"schemaName": {
+						"type": "string"
+					},
+					"tableName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "AzureSqlTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": {
+						"value": "@dataset().schemaName",
+						"type": "Expression"
+					},
+					"table": {
+						"value": "@dataset().tableName",
+						"type": "Expression"
+					}
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/MLS_DataMovement')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "ApiRequestPost",
+						"type": "WebActivity",
+						"dependsOn": [
+							{
+								"activity": "PipelineTriggerDateTime",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"url": "https://mls-sasapimgmt.azure-api.net/mlsapi/Request",
+							"connectVia": {
+								"referenceName": "integrationRuntime1",
+								"type": "IntegrationRuntimeReference"
+							},
+							"method": "POST",
+							"headers": {
+								"Content-Type": "application/json",
+								"Ocp-Apim-Subscription-Key": {
+									"value": "@pipeline().parameters.APISubscriptionKey",
+									"type": "Expression"
+								}
+							},
+							"body": {
+								"value": "@concat('{\"endpoint\":\"',pipeline().parameters.SourceTableName,'\",\n\"startDate\":\"',pipeline().parameters.WaterMarkDate,'\"}')",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "ApiToken",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "ApiRequestPost",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "token",
+							"value": {
+								"value": "@activity('ApiRequestPost').output.token",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "UntilDataIsReady",
+						"type": "Until",
+						"dependsOn": [
+							{
+								"activity": "ApiToken",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"expression": {
+								"value": "@bool(variables('ApiDataCheck'))",
+								"type": "Expression"
+							},
+							"activities": [
+								{
+									"name": "WaitToCheckIfDataIsReady",
+									"type": "Wait",
+									"dependsOn": [],
+									"userProperties": [],
+									"typeProperties": {
+										"waitTimeInSeconds": 60
+									}
+								},
+								{
+									"name": "ApiRequestCheck",
+									"type": "WebActivity",
+									"dependsOn": [
+										{
+											"activity": "WaitToCheckIfDataIsReady",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"url": "https://mls-sasapimgmt.azure-api.net/mlsapi/Polling",
+										"connectVia": {
+											"referenceName": "integrationRuntime1",
+											"type": "IntegrationRuntimeReference"
+										},
+										"method": "POST",
+										"headers": {
+											"Content-Type": "application/json",
+											"Ocp-Apim-Subscription-Key": {
+												"value": "@pipeline().parameters.APISubscriptionKey",
+												"type": "Expression"
+											}
+										},
+										"body": {
+											"value": "@concat('{\"token\":\"', variables('token'), '\"}')",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "If Condition1_copy1",
+									"type": "IfCondition",
+									"dependsOn": [
+										{
+											"activity": "ApiRequestCheck",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"expression": {
+											"value": "@contains(activity('ApiRequestCheck').output,'message')",
+											"type": "Expression"
+										},
+										"ifFalseActivities": [
+											{
+												"name": "SetAPIDataCheckTo1Ready",
+												"type": "SetVariable",
+												"dependsOn": [],
+												"userProperties": [],
+												"typeProperties": {
+													"variableName": "ApiDataCheck",
+													"value": {
+														"value": "@bool(1)",
+														"type": "Expression"
+													}
+												}
+											}
+										]
+									}
+								}
+							],
+							"timeout": "0.1:00:00"
+						}
+					},
+					{
+						"name": "SetPageCount",
+						"type": "SetVariable",
+						"dependsOn": [
+							{
+								"activity": "UntilDataIsReady",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "Pages",
+							"value": {
+								"value": "@activity('ApiRequestCheck').output.pages",
+								"type": "Expression"
+							}
+						}
+					},
+					{
+						"name": "MoveDataForEachPage",
+						"type": "ForEach",
+						"dependsOn": [
+							{
+								"activity": "SetPageCount",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"userProperties": [],
+						"typeProperties": {
+							"items": {
+								"value": "@range(1,int(activity('ApiRequestCheck').output.pages))",
+								"type": "Expression"
+							},
+							"isSequential": true,
+							"activities": [
+								{
+									"name": "CopyToADLJson_copy1",
+									"type": "Copy",
+									"dependsOn": [],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "RestSource",
+											"httpRequestTimeout": "00:01:40",
+											"requestInterval": "00.00:00:00.010",
+											"requestMethod": "POST",
+											"requestBody": {
+												"value": "@concat('{\"token\":\"',variables('token'),'\",\"page\":\"',variables('CurrentPage'),'\"}')",
+												"type": "Expression"
+											},
+											"additionalHeaders": {
+												"Content-Type": "application/json"
+											}
+										},
+										"sink": {
+											"type": "JsonSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings",
+												"copyBehavior": "PreserveHierarchy"
+											},
+											"formatSettings": {
+												"type": "JsonWriteSettings"
+											}
+										},
+										"enableStaging": false
+									},
+									"inputs": [
+										{
+											"referenceName": "ds_MLSDataWarehouse",
+											"type": "DatasetReference"
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "ds_ADL_JSON_uniondatalake",
+											"type": "DatasetReference",
+											"parameters": {
+												"Container": {
+													"value": "@pipeline().parameters.BlobContainer",
+													"type": "Expression"
+												},
+												"RawFolder": {
+													"value": "@pipeline().parameters.RawFolder",
+													"type": "Expression"
+												},
+												"FileName": {
+													"value": "@concat(pipeline().parameters.SourceTableName,'_',variables('CurrentPage'))",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "ComputerVarTempAddCounter",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "CleanCurrentFolder",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "TempAddCounter",
+										"value": {
+											"value": "@string(add(int(variables('CurrentPage')),1))",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "SetNextPageVarCurrentPage",
+									"description": "for next until loop",
+									"type": "SetVariable",
+									"dependsOn": [
+										{
+											"activity": "ComputerVarTempAddCounter",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"userProperties": [],
+									"typeProperties": {
+										"variableName": "CurrentPage",
+										"value": {
+											"value": "@variables('TempAddCounter')",
+											"type": "Expression"
+										}
+									}
+								},
+								{
+									"name": "CopyFromADLJsontoSQL",
+									"type": "Copy",
+									"dependsOn": [
+										{
+											"activity": "CopyToADLJson_copy1",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "DelimitedTextSource",
+											"additionalColumns": [
+												{
+													"name": "datetime",
+													"value": {
+														"value": "@formatDateTime(variables('PipelineTriggerDateTime'), 'yyyy-MM-dd hh:mm')",
+														"type": "Expression"
+													}
+												},
+												{
+													"name": "Sourcefilenme",
+													"value": {
+														"value": "@pipeline().parameters.SourceTableName",
+														"type": "Expression"
+													}
+												},
+												{
+													"name": "page",
+													"value": {
+														"value": "@int(variables('CurrentPage'))",
+														"type": "Expression"
+													}
+												}
+											],
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "DelimitedTextReadSettings"
+											}
+										},
+										"sink": {
+											"type": "AzureSqlSink",
+											"writeBehavior": "insert",
+											"sqlWriterUseTableLock": false
+										},
+										"enableStaging": false,
+										"translator": {
+											"type": "TabularTranslator",
+											"mappings": [
+												{
+													"source": {
+														"type": "String",
+														"physicalType": "String",
+														"ordinal": 1
+													},
+													"sink": {
+														"name": "Data",
+														"type": "String",
+														"physicalType": "varchar"
+													}
+												},
+												{
+													"source": {
+														"name": "datetime",
+														"type": "String"
+													},
+													"sink": {
+														"name": "FeedDate",
+														"type": "DateTime",
+														"physicalType": "datetime"
+													}
+												},
+												{
+													"source": {
+														"name": "Sourcefilenme",
+														"type": "String"
+													},
+													"sink": {
+														"name": "Dataset",
+														"type": "String",
+														"physicalType": "varchar"
+													}
+												},
+												{
+													"source": {
+														"name": "page",
+														"type": "String"
+													},
+													"sink": {
+														"name": "Page",
+														"type": "Int32",
+														"physicalType": "int"
+													}
+												}
+											],
+											"typeConversion": true,
+											"typeConversionSettings": {
+												"allowDataTruncation": true,
+												"treatBooleanAsNumber": false
+											}
+										}
+									},
+									"inputs": [
+										{
+											"referenceName": "ds_ADL_Delimited_uniondatalake_mlsdw_Custom",
+											"type": "DatasetReference",
+											"parameters": {
+												"Container": {
+													"value": "@pipeline().parameters.BlobContainer",
+													"type": "Expression"
+												},
+												"rawfolder": {
+													"value": "@pipeline().parameters.RawFolder",
+													"type": "Expression"
+												},
+												"filename": {
+													"value": "@concat(pipeline().parameters.SourceTableName,'_',variables('CurrentPage'))",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "ds_SQL_unionsqldb",
+											"type": "DatasetReference",
+											"parameters": {
+												"schemaName": "mlsdw",
+												"tableName": "JsonFeeds"
+											}
+										}
+									]
+								},
+								{
+									"name": "ParseJSONAndLoadSQL",
+									"type": "SqlServerStoredProcedure",
+									"dependsOn": [
+										{
+											"activity": "CopyFromADLJsontoSQL",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "0.12:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"storedProcedureName": "[[mlsdw].[ExecJsonDataProc]",
+										"storedProcedureParameters": {
+											"feeddate": {
+												"value": {
+													"value": "@formatDateTime(variables('PipelineTriggerDateTime'), 'yyyy-MM-dd hh:mm')",
+													"type": "Expression"
+												},
+												"type": "DateTime"
+											},
+											"Pagenumber": {
+												"value": {
+													"value": "@variables('CurrentPage')",
+													"type": "Expression"
+												},
+												"type": "Int32"
+											},
+											"SourceObject": {
+												"value": {
+													"value": "@pipeline().parameters.SourceTableName",
+													"type": "Expression"
+												},
+												"type": "String"
+											}
+										}
+									},
+									"linkedServiceName": {
+										"referenceName": "[parameters('ls_unionsql')]",
+										"type": "LinkedServiceReference"
+									}
+								},
+								{
+									"name": "copySourceFiletoArchive",
+									"description": "Copy a file from the source store to the destination store.",
+									"type": "Copy",
+									"dependsOn": [
+										{
+											"activity": "ParseJSONAndLoadSQL",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"source": {
+											"type": "DelimitedTextSource",
+											"storeSettings": {
+												"type": "AzureBlobFSReadSettings",
+												"recursive": true,
+												"enablePartitionDiscovery": false
+											},
+											"formatSettings": {
+												"type": "DelimitedTextReadSettings"
+											},
+											"recursive": false
+										},
+										"sink": {
+											"type": "DelimitedTextSink",
+											"storeSettings": {
+												"type": "AzureBlobFSWriteSettings"
+											},
+											"formatSettings": {
+												"type": "DelimitedTextWriteSettings",
+												"quoteAllText": true,
+												"fileExtension": ".txt"
+											}
+										},
+										"enableStaging": false,
+										"dataIntegrationUnits": 0
+									},
+									"inputs": [
+										{
+											"referenceName": "ds_Adl_txt_uniondatalake",
+											"type": "DatasetReference",
+											"parameters": {
+												"fileSystem": "@pipeline().parameters.BlobContainer",
+												"directory": {
+													"value": "@pipeline().parameters.RawFolder",
+													"type": "Expression"
+												},
+												"fileName": {
+													"value": "@concat(pipeline().parameters.SourceTableName,'_',variables('CurrentPage'))",
+													"type": "Expression"
+												}
+											}
+										}
+									],
+									"outputs": [
+										{
+											"referenceName": "ds_Adl_txt_uniondatalake",
+											"type": "DatasetReference",
+											"parameters": {
+												"fileSystem": "@pipeline().parameters.BlobContainer",
+												"directory": {
+													"value": "@concat(pipeline().parameters.ArchiveDirectory,'/',formatDateTime(variables('PipelineTriggerDateTime'), 'yyyy-MM-dd hh:mm'))",
+													"type": "Expression"
+												},
+												"fileName": {
+													"value": "@concat(pipeline().parameters.SourceTableName,'_',variables('CurrentPage'))",
+													"type": "Expression"
+												}
+											}
+										}
+									]
+								},
+								{
+									"name": "CleanCurrentFolder",
+									"description": "Delete a file from the source store",
+									"type": "Delete",
+									"dependsOn": [
+										{
+											"activity": "copySourceFiletoArchive",
+											"dependencyConditions": [
+												"Succeeded"
+											]
+										}
+									],
+									"policy": {
+										"timeout": "7.00:00:00",
+										"retry": 0,
+										"retryIntervalInSeconds": 30,
+										"secureOutput": false,
+										"secureInput": false
+									},
+									"userProperties": [],
+									"typeProperties": {
+										"dataset": {
+											"referenceName": "ds_Adl_txt_uniondatalake",
+											"type": "DatasetReference",
+											"parameters": {
+												"fileSystem": "@pipeline().parameters.BlobContainer",
+												"directory": {
+													"value": "@pipeline().parameters.RawFolder",
+													"type": "Expression"
+												},
+												"fileName": {
+													"value": "@concat(pipeline().parameters.SourceTableName,'_',variables('CurrentPage'))",
+													"type": "Expression"
+												}
+											}
+										},
+										"enableLogging": false,
+										"storeSettings": {
+											"type": "AzureBlobFSReadSettings",
+											"recursive": true
+										}
+									}
+								}
+							]
+						}
+					},
+					{
+						"name": "UpdateExecutionDetails",
+						"type": "SqlServerStoredProcedure",
+						"dependsOn": [
+							{
+								"activity": "MoveDataForEachPage",
+								"dependencyConditions": [
+									"Succeeded"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"storedProcedureName": "[[meta].[UpdateExecutionDetails]",
+							"storedProcedureParameters": {
+								"controlid": {
+									"value": {
+										"value": "@pipeline().parameters.MetaControltableControlID",
+										"type": "Expression"
+									},
+									"type": "Int32"
+								},
+								"executiondatetime": {
+									"value": {
+										"value": "@formatDateTime(variables('PipelineTriggerDateTime'), 'yyyy-MM-dd hh:mm')",
+										"type": "Expression"
+									},
+									"type": "DateTime"
+								},
+								"pipeline": {
+									"value": {
+										"value": "@pipeline().parameters.MainPipeline",
+										"type": "Expression"
+									},
+									"type": "String"
+								},
+								"rowcount": {
+									"value": "0",
+									"type": "Int32"
+								}
+							}
+						},
+						"linkedServiceName": {
+							"referenceName": "[parameters('ls_unionsql')]",
+							"type": "LinkedServiceReference"
+						}
+					},
+					{
+						"name": "PipelineTriggerDateTime",
+						"type": "SetVariable",
+						"dependsOn": [],
+						"userProperties": [],
+						"typeProperties": {
+							"variableName": "PipelineTriggerDateTime",
+							"value": {
+								"value": "@convertFromUtc(utcNow(),'Eastern Standard Time')",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"parameters": {
+					"SourceTableName": {
+						"type": "string",
+						"defaultValue": "PU_IQ_CRM_CUSTOMER_SF"
+					},
+					"WaterMarkDate": {
+						"type": "string",
+						"defaultValue": "2022-12-03 10:00:33.943"
+					},
+					"DestinationTableName": {
+						"type": "string",
+						"defaultValue": "CrmCustomer"
+					},
+					"DestinationSchema": {
+						"type": "string",
+						"defaultValue": "mlsdw"
+					},
+					"BlobContainer": {
+						"type": "string",
+						"defaultValue": "incoming"
+					},
+					"RawFolder": {
+						"type": "string",
+						"defaultValue": "mlsdw/current"
+					},
+					"KeyColumns": {
+						"type": "string",
+						"defaultValue": "id"
+					},
+					"APISubscriptionKey": {
+						"type": "string",
+						"defaultValue": "e60f6d2fd1564418ab8419b003ae8cb9"
+					},
+					"MetaControltableControlID": {
+						"type": "string",
+						"defaultValue": "12"
+					},
+					"MainPipeline": {
+						"type": "string",
+						"defaultValue": "Manual"
+					},
+					"StoredProc": {
+						"type": "string",
+						"defaultValue": "mlsdw.LoadCrmCustomer"
+					},
+					"archivedirectory": {
+						"type": "string",
+						"defaultValue": "mlsdw/archive"
+					}
+				},
+				"variables": {
+					"token": {
+						"type": "String"
+					},
+					"ApiDataCheck": {
+						"type": "Boolean"
+					},
+					"Pages": {
+						"type": "String"
+					},
+					"CurrentPage": {
+						"type": "String",
+						"defaultValue": "1"
+					},
+					"TempAddCounter": {
+						"type": "String",
+						"defaultValue": "0"
+					},
+					"PipelineTriggerDateTime": {
+						"type": "String"
+					}
+				},
+				"folder": {
+					"name": "MLS DataWarehouse"
+				},
+				"annotations": [],
+				"lastPublishTime": "2022-12-06T20:22:15Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/ds_MLSDataWarehouse')]",
+				"[concat(variables('factoryId'), '/datasets/ds_ADL_JSON_uniondatalake')]",
+				"[concat(variables('factoryId'), '/datasets/ds_ADL_Delimited_uniondatalake_mlsdw_Custom')]",
+				"[concat(variables('factoryId'), '/datasets/ds_SQL_unionsqldb')]",
+				"[concat(variables('factoryId'), '/datasets/ds_Adl_txt_uniondatalake')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_MLSDataWarehouse')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('ls_MLSdw')]",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "RestResource",
+				"schema": []
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_ADL_JSON_uniondatalake')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('ls_uniondatalake')]",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"RawFolder": {
+						"type": "string"
+					},
+					"FileName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "Json",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().FileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().RawFolder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					}
+				},
+				"schema": {}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_ADL_Delimited_uniondatalake_mlsdw_Custom')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('ls_uniondatalake')]",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"Container": {
+						"type": "string"
+					},
+					"rawfolder": {
+						"type": "string"
+					},
+					"filename": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().filename",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().rawfolder",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().Container",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": "\u0001",
+					"rowDelimiter": "\n",
+					"escapeChar": "",
+					"nullValue": "xx",
+					"quoteChar": ""
+				},
+				"schema": [
+					{
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/ds_Adl_txt_uniondatalake')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "[parameters('ls_uniondatalake')]",
+					"type": "LinkedServiceReference"
+				},
+				"parameters": {
+					"fileSystem": {
+						"type": "string",
+						"defaultValue": "Incoming"
+					},
+					"directory": {
+						"type": "string"
+					},
+					"fileName": {
+						"type": "string"
+					}
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobFSLocation",
+						"fileName": {
+							"value": "@dataset().fileName",
+							"type": "Expression"
+						},
+						"folderPath": {
+							"value": "@dataset().directory",
+							"type": "Expression"
+						},
+						"fileSystem": {
+							"value": "@dataset().fileSystem",
+							"type": "Expression"
+						}
+					},
+					"columnDelimiter": "|",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": []
+		}
+	]
+}
